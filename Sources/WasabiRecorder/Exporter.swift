@@ -14,6 +14,14 @@ enum ExportFormat: String, CaseIterable {
     }
 
     var label: String { rawValue.uppercased() }
+
+    var summary: String {
+        switch self {
+        case .wav: "24 bit · 非圧縮"
+        case .m4a: "AAC 256 kbps"
+        case .mp3: "約 190 kbps · 容量小"
+        }
+    }
 }
 
 /// Destination for rendered buffers: an `AVAudioFile`, or `MP3Writer` for

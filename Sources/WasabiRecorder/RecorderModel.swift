@@ -75,6 +75,10 @@ final class RecorderModel {
     /// Export gain. Auto keeps the selection's peak at -1 dBFS.
     private(set) var gainDB: Double = 0
     private(set) var isAutoGain = true
+    /// Format for drags and the save panel's initial choice.
+    var exportFormat: ExportFormat = .wav {
+        didSet { UserDefaults.standard.set(exportFormat.rawValue, forKey: Self.exportFormatKey) }
+    }
 
     static let minimumSelection: TimeInterval = 0.05
     static let gainRange = PreviewPlayer.gainRange
@@ -126,6 +130,7 @@ final class RecorderModel {
         } else if let bundleID = defaults.string(forKey: Self.selectedAppKey), let app = AppIdentity(bundleID: bundleID) {
             source = .app(app)
         }
+        exportFormat = ExportFormat(rawValue: defaults.string(forKey: Self.exportFormatKey) ?? "") ?? .wav
         try? FileManager.default.removeItem(at: Self.temporaryDirectory)
     }
 
@@ -471,17 +476,13 @@ final class RecorderModel {
         panel.begin { [weak self] response in
             MainActor.assumeIsolated {
                 guard let self, response == .OK, let destination = panel.url else { return }
-                UserDefaults.standard.set(accessory.format.rawValue, forKey: Self.exportFormatKey)
+                self.exportFormat = accessory.format
                 self.export(source, to: destination, format: accessory.format)
             }
         }
     }
 
     // MARK: - Drag out
-
-    private var exportFormat: ExportFormat {
-        ExportFormat(rawValue: UserDefaults.standard.string(forKey: Self.exportFormatKey) ?? "") ?? .wav
-    }
 
     /// Renders the current trim and gain into ~/Music/Wasabi Recorder for a
     /// drag session. Reuses the last file when nothing changed.

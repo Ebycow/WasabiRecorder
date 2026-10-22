@@ -498,7 +498,7 @@ enum GainText {
 }
 
 /// Click to save with a panel; drag to drop the trimmed, gain-adjusted file
-/// straight into Finder, a DAW or a chat app.
+/// straight into Finder, a DAW or a chat app. Right-click picks the format.
 struct SaveButton: View {
     let model: RecorderModel
     private let isPressed = State(initialValue: false)
@@ -532,24 +532,40 @@ struct SaveButton: View {
                 onPress: { isPressed.wrappedValue = $0 },
                 onClick: { model.save() },
                 prepareFile: { model.fileForDrag() },
-                onDragEnd: { model.dragEnded(delivered: $0) }
+                onDragEnd: { model.dragEnded(delivered: $0) },
+                makeMenu: formatMenu
             )
         }
-        .help("クリックで保存・ドラッグで書き出し")
+        .help("クリックで保存・ドラッグで \(model.exportFormat.label) を書き出し・右クリックで形式を選択")
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel("保存")
+        .accessibilityValue(model.exportFormat.label)
         .accessibilityAction { model.save() }
+    }
+
+    private func formatMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(.sectionHeader(title: "書き出し形式"))
+        for format in ExportFormat.allCases {
+            let item = ActionMenuItem(title: format.label) { model.exportFormat = format }
+            item.subtitle = format.summary
+            item.state = format == model.exportFormat ? .on : .off
+            menu.addItem(item)
+        }
+        return menu
     }
 }
 
 /// AppKit mouse handling for the save button: a click runs `onClick`, a drag
-/// starts a file drag session with the URL from `prepareFile`.
+/// starts a file drag session with the URL from `prepareFile`, a right-click
+/// shows `makeMenu`.
 struct FileDragSource: NSViewRepresentable {
     let onPress: (Bool) -> Void
     let onClick: () -> Void
     let prepareFile: () -> URL?
     let onDragEnd: (Bool) -> Void
+    let makeMenu: () -> NSMenu
 
     func makeNSView(context: Context) -> SourceView { SourceView() }
 
@@ -558,6 +574,7 @@ struct FileDragSource: NSViewRepresentable {
         view.onClick = onClick
         view.prepareFile = prepareFile
         view.onDragEnd = onDragEnd
+        view.makeMenu = makeMenu
     }
 
     final class SourceView: NSView, NSDraggingSource {
@@ -565,13 +582,20 @@ struct FileDragSource: NSViewRepresentable {
         var onClick: () -> Void = {}
         var prepareFile: () -> URL? = { nil }
         var onDragEnd: (Bool) -> Void = { _ in }
+        var makeMenu: () -> NSMenu? = { nil }
 
         private var mouseDownLocation: NSPoint?
         private var isDragging = false
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+        override func menu(for event: NSEvent) -> NSMenu? { makeMenu() }
+
         override func mouseDown(with event: NSEvent) {
+            if event.modifierFlags.contains(.control), let menu = makeMenu() {
+                NSMenu.popUpContextMenu(menu, with: event, for: self)
+                return
+            }
             mouseDownLocation = event.locationInWindow
             isDragging = false
             onPress(true)

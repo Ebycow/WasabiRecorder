@@ -3,16 +3,28 @@ import AVFoundation
 import UniformTypeIdentifiers
 
 enum ExportFormat: String, CaseIterable {
-    case wav, m4a
+    case wav, m4a, mp3
 
     var contentType: UTType {
         switch self {
         case .wav: .wav
         case .m4a: .mpeg4Audio
+        case .mp3: .mp3
         }
     }
 
     var label: String { rawValue.uppercased() }
+}
+
+/// Destination for rendered buffers: an `AVAudioFile`, or `MP3Writer` for
+/// the format Core Audio cannot encode.
+protocol AudioSink: AnyObject {
+    func write(from buffer: AVAudioPCMBuffer) throws
+    func finish() throws
+}
+
+extension AVAudioFile: AudioSink {
+    func finish() throws { close() }
 }
 
 enum Exporter {
@@ -46,16 +58,20 @@ enum Exporter {
             AVNumberOfChannelsKey: channels,
             AVEncoderBitRateKey: 256_000,
         ]
+        case .mp3: [:]
         }
 
         try? FileManager.default.removeItem(at: destination)
-        let output = try AVAudioFile(
-            forWriting: destination,
-            settings: settings,
-            commonFormat: processing.commonFormat,
-            interleaved: processing.isInterleaved
-        )
-        defer { output.close() }
+        let output: any AudioSink = if format == .mp3 {
+            try MP3Writer(url: destination, sampleRate: sampleRate, channels: channels)
+        } else {
+            try AVAudioFile(
+                forWriting: destination,
+                settings: settings,
+                commonFormat: processing.commonFormat,
+                interleaved: processing.isInterleaved
+            )
+        }
 
         let chunk: AVAudioFrameCount = 32_768
         guard let buffer = AVAudioPCMBuffer(pcmFormat: processing, frameCapacity: chunk) else { return }
@@ -73,6 +89,7 @@ enum Exporter {
             try output.write(from: buffer)
             written += AVAudioFramePosition(count)
         }
+        try output.finish()
     }
 
     private static func applyGain(_ buffer: AVAudioPCMBuffer, _ gain: Float) {

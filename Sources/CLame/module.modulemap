@@ -1,0 +1,4 @@
+module CLame [system] {
+    header "shim.h"
+    export *
+}

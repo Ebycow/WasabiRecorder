@@ -254,9 +254,10 @@ struct EditorPanel: View {
     }
 }
 
+/// Only the handles change the selection; clicking or dragging anywhere else
+/// moves the playhead.
 struct TrimWaveform: View {
     let model: RecorderModel
-    private let dragAnchor = State<TimeInterval?>(initialValue: nil)
 
     private let handleHitWidth: CGFloat = 18
 
@@ -309,16 +310,7 @@ struct TrimWaveform: View {
             .contentShape(Rectangle())
             .coordinateSpace(.named("trim"))
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                let anchor = dragAnchor.wrappedValue ?? time(value.startLocation.x)
-                dragAnchor.wrappedValue = anchor
-                if abs(value.translation.width) > 3 {
-                    model.setSelection(from: anchor, to: time(value.location.x))
-                }
-            }.onEnded { value in
-                if abs(value.translation.width) <= 3 {
-                    model.seek(to: time(value.startLocation.x))
-                }
-                dragAnchor.wrappedValue = nil
+                model.seek(to: time(value.location.x))
             })
             .simultaneousGesture(TapGesture(count: 2).onEnded { model.resetSelection() })
         }

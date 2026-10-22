@@ -331,26 +331,17 @@ final class RecorderModel {
 
     // MARK: - Trimming
 
+    /// Also rewinds the playhead so the next play starts at the new start.
     func setSelectionStart(_ time: TimeInterval) {
         let start = min(max(0, time), selection.upperBound - Self.minimumSelection)
         selection = start...selection.upperBound
         updateAutoGain()
+        seek(to: start)
     }
 
     func setSelectionEnd(_ time: TimeInterval) {
         let end = max(min(duration, time), selection.lowerBound + Self.minimumSelection)
         selection = selection.lowerBound...end
-        updateAutoGain()
-    }
-
-    func setSelection(from a: TimeInterval, to b: TimeInterval) {
-        var lower = max(0, min(a, b))
-        var upper = min(duration, max(a, b))
-        if upper - lower < Self.minimumSelection {
-            upper = min(duration, lower + Self.minimumSelection)
-            lower = max(0, upper - Self.minimumSelection)
-        }
-        selection = lower...upper
         updateAutoGain()
     }
 
@@ -395,8 +386,9 @@ final class RecorderModel {
         isPlaying ? pausePlayback() : startPlayback()
     }
 
+    /// Playback never leaves the selection, so neither does the playhead.
     func seek(to time: TimeInterval) {
-        let time = min(max(0, time), duration)
+        let time = time.clamped(to: selection)
         playhead = time
         if isPlaying { play(from: time) }
     }
